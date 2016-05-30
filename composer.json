@@ -1,0 +1,22 @@
+{
+    "name": "pdedkov/cakephp-mongo",
+    "description": "mongodb cakephp plugin",
+    "type": "cakephp-plugin",
+    "license": "MIT",
+    "version": "1.0",
+    "authors": [
+        {
+            "name": "Pavel E. Dedkov",
+            "email": "pavel.dedkov@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">= 5.4.0",
+        "composer/installers": "~1.0",
+        "ext-mongo": "*"
+    },
+    "extra": {
+        "installer-name": "MongoDb"
+    }
+}
