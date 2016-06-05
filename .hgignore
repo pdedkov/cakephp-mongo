@@ -1,7 +1,0 @@
-
-syntax: regexp
-^\.idea$
-^vendor$
-^\.project$
-syntax: regexp
-^\.buildpath$
