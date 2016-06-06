@@ -26,8 +26,6 @@
 
 App::import('Datasource', 'DboSource');
 
-use Logger\Instance as L;
-
 /**
  * MongoDB Source
  *
@@ -62,7 +60,13 @@ class MongoDbSource extends DboSource {
 	 * @var string
 	 * @access protected
 	 */
-	protected $_driverVersion = Mongo::VERSION;
+	protected $_driverVersion = MongoClient::VERSION;
+
+	/**
+	 * mongodb connection
+	 * @var MongoDb
+	 */
+	protected $_connection = null;
 
 	/**
 	 * startTime property
@@ -85,16 +89,15 @@ class MongoDbSource extends DboSource {
 	 * @access public
 	 *
 	 */
-	public $_baseConfig = array(
-		'set_string_id' => true,
+	public $_baseConfig = [
 		'persistent' => true,
 		'host'       => 'localhost',
 		'database'   => '',
 		'port'       => '27017',
 		'login'		=> '',
 		'password'	=> '',
-		'replicaset'	=> '',
-	);
+		'replicaset'	=> ''
+	];
 
 	/**
 	 * column definition
@@ -132,11 +135,10 @@ class MongoDbSource extends DboSource {
 	 *
 	 * @param array $config Configuration array
 	 * @param bool $autoConnect false
-	 * @return void
 	 * @access public
 	 */
-	function __construct($config = array(), $autoConnect = false) {
-		return parent::__construct($config, $autoConnect);
+	function __construct($config = [], $autoConnect = false) {
+		parent::__construct($config, $autoConnect);
 	}
 
 	/**
@@ -177,7 +179,6 @@ class MongoDbSource extends DboSource {
 		$this->connected = false;
 
 		try{
-
 			$host = $this->createConnectionName($this->config, $this->_driverVersion);
 
 			if (isset($this->config['replicaset']) && count($this->config['replicaset']) === 2) {
@@ -191,7 +192,7 @@ class MongoDbSource extends DboSource {
 			}
 
 			if ($this->_db = $this->connection->selectDB($this->config['database'])) {
-				if (!empty($this->config['login'])) {
+				if (!empty($this->config['login']) && $this->_driverVersion < '1.2.0') {
 					$return = $this->_db->authenticate($this->config['login'], $this->config['password']);
 					if (!$return || !$return['ok']) {
 						trigger_error('MongodbSource::connect ' . $return['errmsg']);
@@ -215,6 +216,7 @@ class MongoDbSource extends DboSource {
 	 *
 	 * @param array $config
 	 * @param string $version  version of MongoDriver
+	 * @return string
 	 */
 	public function createConnectionName($config, $version) {
 		$host = null;
@@ -242,7 +244,7 @@ class MongoDbSource extends DboSource {
 	 * @param string $table
 	 * @param string $fields
 	 * @param array $values
-	 * @access public
+	 * @return bool
 	 */
 	public function insertMulti($table, $fields, $values) {
 		$table = $this->fullTableName($table);
@@ -269,10 +271,7 @@ class MongoDbSource extends DboSource {
 					->selectCollection($table)
 					->batchInsert($data, array('safe' => true));
 			} catch (MongoException $e) {
-				L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-				$this->error = $e->getMessage();
-				trigger_error($this->error);
+				trigger_error($e->getMessage());
 			}
 			if ($this->fullDebug) {
 				$this->logQuery("db.{$table}.insertMulti( :data , array('safe' => true))", compact('data'));
@@ -485,10 +484,7 @@ class MongoDbSource extends DboSource {
 				->selectCollection($Model->table)
 				->insert($data, array('w' => 1));
 		} catch (MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+			trigger_error($e->getMessage());
 		}
 		if ($this->fullDebug) {
 			$this->logQuery("db.{$Model->useTable}.insert( :data , true)", compact('data'));
@@ -586,10 +582,7 @@ class MongoDbSource extends DboSource {
 				->selectCollection($Model->table)
 				->distinct($keys, $params);
 		} catch (MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+			trigger_error($e->getMessage());
 		}
 		if ($this->fullDebug) {
 			$this->logQuery("db.{$Model->useTable}.distinct( :keys, :params )", compact('keys', 'params'));
@@ -639,10 +632,7 @@ class MongoDbSource extends DboSource {
 				->selectCollection($Model->table)
 				->group($key, $initial, $reduce, $options);
 		} catch (MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+			trigger_error($e->getMessage());
 		}
 		if ($this->fullDebug) {
 			$this->logQuery("db.{$Model->useTable}.group( :key, :initial, :reduce, :options )", $params);
@@ -676,10 +666,7 @@ class MongoDbSource extends DboSource {
 				->selectCollection($Model->table)
 				->ensureIndex($keys, $params);
 		} catch (MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+			trigger_error($e->getMessage());
 		}
 		if ($this->fullDebug) {
 			$this->logQuery("db.{$Model->useTable}.ensureIndex( :keys, :params )", compact('keys', 'params'));
@@ -732,10 +719,7 @@ class MongoDbSource extends DboSource {
 			$mongoCollectionObj = $this->_db
 				->selectCollection($Model->table);
 		} catch (MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+			trigger_error($e->getMessage());
 			return false;
 		}
 
@@ -750,10 +734,8 @@ class MongoDbSource extends DboSource {
 			try{
 				$return = $mongoCollectionObj->update($cond, $data, array("multiple" => false));
 			} catch (MongoException $e) {
-				L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-				$this->error = $e->getMessage();
-				trigger_error($this->error);
+				trigger_error($e->getMessage());
+				return false;
 			}
 			if ($this->fullDebug) {
 				$this->logQuery("db.{$Model->useTable}.update( :conditions, :data, :params )",
@@ -764,10 +746,8 @@ class MongoDbSource extends DboSource {
 			try{
 				$return = $mongoCollectionObj->save($data);
 			} catch (MongoException $e) {
-				L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-				$this->error = $e->getMessage();
-				trigger_error($this->error);
+				trigger_error($e->getMessage());
+				return false;
 			}
 			if ($this->fullDebug) {
 				$this->logQuery("db.{$Model->useTable}.save( :data )", compact('data'));
@@ -847,10 +827,8 @@ class MongoDbSource extends DboSource {
 				->selectCollection($Model->table)
 				->update($conditions, $fields, array("multiple" => true));
 		} catch (MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+			trigger_error($e->getMessage());
+			return false;
 		}
 
 		if ($this->fullDebug) {
@@ -956,10 +934,7 @@ class MongoDbSource extends DboSource {
 			}
 			$return = true;
 		} catch (MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+			trigger_error($e->getMessage());
 		}
 
 		return $return;
@@ -1144,6 +1119,7 @@ class MongoDbSource extends DboSource {
 		}
 
 		$this->_prepareLogQuery($Model); // just sets a timer
+
 		$return = $this->_db
 			->command($query);
 		if ($this->fullDebug) {
@@ -1283,7 +1259,6 @@ class MongoDbSource extends DboSource {
 		$this->_startTime = microtime(true);
 		$this->took = null;
 		$this->affected = null;
-		$this->error = null;
 		$this->numRows = null;
 		return true;
 	}
@@ -1320,16 +1295,12 @@ class MongoDbSource extends DboSource {
 	public function logQuery($query, $args = array()) {
 		if ($args) {
 			$this->_stringify($args);
-			$query = String::insert($query, $args);
+			$query = CakeText::insert($query, $args);
 		}
 		$this->took = round((microtime(true) - $this->_startTime) * 1000, 0);
 		$this->affected = null;
-		if (empty($this->error['err'])) {
-			$this->error = $this->_db->lastError();
-			if (!is_scalar($this->error)) {
-				$this->error = json_encode($this->error);
-			}
-		}
+
+
 		$this->numRows = !empty($args['count'])?$args['count']:null;
 
 		$query = preg_replace('@"ObjectId\((.*?)\)"@', 'ObjectId ("\1")', $query);
