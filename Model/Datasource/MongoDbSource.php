@@ -181,11 +181,9 @@ class MongoDbSource extends DboSource {
 			$host = $this->createConnectionName($this->config, $this->_driverVersion);
 
 			if (isset($this->config['replicaset']) && count($this->config['replicaset']) === 2) {
-				$this->connection = new Mongo($this->config['replicaset']['host'], $this->config['replicaset']['options']);
-			} else if ($this->_driverVersion >= '1.2.0') {
-				$this->connection = new Mongo($host/*, array("persist" => $this->config['persistent'])*/);
+				$this->connection = new MongoClient($this->config['replicaset']['host'], $this->config['replicaset']['options']);
 			} else {
-				$this->connection = new Mongo($host, true, $this->config['persistent']);
+				$this->connection = new MongoClient($host);
 			}
 
 			if (isset($this->config['slaveok'])) {
@@ -193,7 +191,7 @@ class MongoDbSource extends DboSource {
 			}
 
 			if ($this->_db = $this->connection->selectDB($this->config['database'])) {
-				if (!empty($this->config['login']) && $this->_driverVersion < '1.2.0') {
+				if (!empty($this->config['login'])) {
 					$return = $this->_db->authenticate($this->config['login'], $this->config['password']);
 					if (!$return || !$return['ok']) {
 						trigger_error('MongodbSource::connect ' . $return['errmsg']);
@@ -204,12 +202,11 @@ class MongoDbSource extends DboSource {
 				$this->connected = true;
 			}
 
-		} catch(MongoException $e) {
-			L::log($e->getMessage(), L::LOG_EXCEPTION, 'mongo-exception');
-
-			$this->error = $e->getMessage();
-			trigger_error($this->error);
+		} catch(\Exception $e) {
+			trigger_error($e->getMessage());
+			return false;
 		}
+
 		return $this->connected;
 	}
 
@@ -379,6 +376,7 @@ class MongoDbSource extends DboSource {
 	 * @access public
 	 */
 	public function listSources($data = null) {
+
 		if (!$this->isConnected()) {
 			return false;
 		}
