@@ -81,10 +81,6 @@ class MongoDbSource extends DboSource {
 	/**
 	 * Base Config
 	 *
-	 * set_string_id:
-	 *    true: In read() method, convert MongoId object to string and set it to array 'id'.
-	 *    false: not convert and set.
-	 *
 	 * @var array
 	 * @access public
 	 *
@@ -493,9 +489,6 @@ class MongoDbSource extends DboSource {
 		if (!empty($return) && $return['ok']) {
 
 			$id = $data['_id'];
-			if($this->config['set_string_id'] && is_object($data['_id'])) {
-				$id = $data['_id']->__toString();
-			}
 			$Model->setInsertID($id);
 			$Model->id = $id;
 			return true;
@@ -555,7 +548,7 @@ class MongoDbSource extends DboSource {
 		$return = "toDrop = :tables;\nfor( i = 0; i < toDrop.length; i++ ) {\n\tdb[toDrop[i]].drop();\n}";
 		$tables = '["' . implode($toDrop, '", "') . '"]';
 
-		return String::insert($return, compact('tables'));
+		return CakeText::insert($return, compact('tables'));
 	}
 
 	/**
@@ -1042,9 +1035,6 @@ class MongoDbSource extends DboSource {
 			if ($this->fullDebug) {
 				if ($return['ok']) {
 					$count = 1;
-					if ($this->config['set_string_id'] && !empty($return['value']['_id']) && is_object($return['value']['_id'])) {
-						$return['value']['_id'] = $return['value']['_id']->__toString();
-					}
 					$return[][$Model->alias] = $return['value'];
 				} else {
 					$count = 0;
@@ -1063,9 +1053,6 @@ class MongoDbSource extends DboSource {
 			$_return = array();
 			while ($return->hasNext()) {
 				$mongodata = $return->getNext();
-				if ($this->config['set_string_id'] && !empty($mongodata['_id']) && is_object($mongodata['_id'])) {
-					$mongodata['_id'] = $mongodata['_id']->__toString();
-				}
 				$_return[][$Model->alias] = $mongodata;
 			}
 			return $_return;
